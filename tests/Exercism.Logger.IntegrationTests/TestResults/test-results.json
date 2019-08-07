@@ -1,1 +1,3 @@
-[{name:"Test that the thing works"}]
+[{"name": "Exercism.Logger.IntegrationTests.UnitTests.Should_pass", "error": null, "passed": true},{"name": "Exercism.Logger.IntegrationTests.UnitTests.Should_fail", "error": "Assert.Equal() Failure
+Expected: 4
+Actual:   0", "passed": false}]

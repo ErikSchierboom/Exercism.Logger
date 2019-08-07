@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using System.Text;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
 
 namespace Microsoft.VisualStudio.TestPlatform.Extension.Exercism.TestLogger
@@ -9,6 +8,20 @@ namespace Microsoft.VisualStudio.TestPlatform.Extension.Exercism.TestLogger
     using ObjectModel;
     using ObjectModel.Client;
 
+    internal class ExercismTestResult
+    {
+        public string Name { get; }
+        public string Error { get; }
+
+        public bool Passed => Error == null;
+
+        public ExercismTestResult(string name, string error)
+        {
+            Name = name;
+            Error = error;
+        }   
+    }
+    
     [FriendlyName(FriendlyName)]
     [ExtensionUri(ExtensionUri)]
     public class ExercismTestLogger : ITestLoggerWithParameters
@@ -17,6 +30,7 @@ namespace Microsoft.VisualStudio.TestPlatform.Extension.Exercism.TestLogger
         private const string FriendlyName = "exercism";
 
         private string _testRunDirectory;
+        private List<ExercismTestResult> _testResults;
 
         public void Initialize(TestLoggerEvents events, string testRunDirectory)
         {
@@ -26,43 +40,46 @@ namespace Microsoft.VisualStudio.TestPlatform.Extension.Exercism.TestLogger
             if (string.IsNullOrEmpty(testRunDirectory))
                 throw new ArgumentNullException(nameof(testRunDirectory));
 
-            events.TestRunMessage += TestMessageHandler;
+            _testRunDirectory = testRunDirectory;
+            _testResults = new List<ExercismTestResult>();
+            
             events.TestResult += TestResultHandler;
             events.TestRunComplete += TestRunCompleteHandler;
-
-            _testRunDirectory = testRunDirectory;
-        }
-
-        private void TestMessageHandler(object sender, TestRunMessageEventArgs e)
-        {
-            Console.WriteLine(_testRunDirectory);
-//            throw new NotImplementedException();
         }
 
         private void TestResultHandler(object sender, TestResultEventArgs e)
         {
-//            throw new NotImplementedException();
+            if (e.Result.Outcome == TestOutcome.Passed ||
+                e.Result.Outcome == TestOutcome.Failed)
+                _testResults.Add(new ExercismTestResult(e.Result.DisplayName, e.Result.ErrorMessage));
         }
 
         private void TestRunCompleteHandler(object sender, TestRunCompleteEventArgs e)
         {
             // dotnet test --logger:exercism --test-adapter-path:C:\Programmeren\exercism\ExercismLogger\src\Exercism.Logger\bin\Debug\netstandard1.5
             
-            var json = new StringBuilder();
-            json.Append("[");
-            json.Append("{");
-            json.Append("name");
-            json.Append(":");
-            json.Append("\"Test that the thing works\"");
-            json.Append("}");
-            json.Append("]");
-
-            var testResultsFilePath = Path.Combine(_testRunDirectory, "test-results.json");
-
             if (!Directory.Exists(_testRunDirectory))
                 Directory.CreateDirectory(_testRunDirectory);
+
+            using (var streamWriter = File.CreateText(Path.Combine(_testRunDirectory, "test-results.json")))
+            {
+                streamWriter.Write("[");
+
+                for (var i = 0; i < _testResults.Count; i++)
+                {
+                    var name = $"\"{_testResults[i].Name}\"";
+                    var error = _testResults[i].Error == null ? "null" : $"\"{_testResults[i].Error}\"";
+                    var passed = _testResults[i].Passed.ToString().ToLower();
+                    
+                    streamWriter.Write("{{\"name\": {0}, \"error\": {1}, \"passed\": {2}}}", name, error, passed);
+                
+                    if (i < _testResults.Count - 1)
+                        streamWriter.Write("," );
+                }
             
-            File.WriteAllText(testResultsFilePath, json.ToString());
+                streamWriter.Write("]");
+                streamWriter.Flush();
+            }
             
 //           [ {
 //                name: "Test that the thing works" ,
